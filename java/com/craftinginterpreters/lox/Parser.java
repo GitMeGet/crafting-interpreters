@@ -20,10 +20,33 @@ class Parser {
 
     while (!isAtEnd()) {
       // entrypoint: statement() rule
-      statements.add(statement());
+      statements.add(declaration());
     }
 
     return statements;
+  }
+
+  private Stmt declaration() {
+    try {
+      if (match(VAR)) return varDeclaration();
+
+      return statement();
+    } catch (ParseError error) {
+      synchronize();
+      return null;
+    }
+  }
+
+  private Stmt varDeclaration() {
+    Token name = consume(IDENTIFIER, "Expect variable name.");
+
+    Expr initializer = null; // default init to null (nil)
+    if (match(EQUAL)) {
+      initializer = expression(); // variable or value
+    }
+
+    consume(SEMICOLON, "Expect ';' after variable declaration.");
+    return new Stmt.Var(name, initializer);
   }
 
   private Stmt statement() {
@@ -33,7 +56,34 @@ class Parser {
   }
 
   private Expr expression() {
-    return equality();
+    return assignment();
+  }
+
+  private Expr assignment() {
+    // parse expression as per normal
+    // includes matching IDENTIFIER (variable)
+    // e.g. newPoint(x + 2, 0).y = 3;
+    Expr expr = equality();
+
+    if (match(EQUAL)) {
+      Token equals = previous();
+      // recursively call assignment() since it is
+      // right-associative (i.e. right-most parsed first)
+      Expr value = assignment();
+
+      // create new assignment expression node iff
+      // left-side of EQUAL is a variable (l-value)
+      if (expr instanceof Expr.Variable) {
+        Token name = ((Expr.Variable)expr).name;
+        return new Expr.Assign(name, value);
+      }
+
+      // else report but don’t throw error here
+      // parser isn’t in a confused state where we need to go into panic mode and synchronize
+      error(equals, "Invalid assignment target.");
+    }
+
+    return expr;
   }
 
   private Stmt printStatement() {
@@ -116,6 +166,10 @@ class Parser {
     if (match(NUMBER, STRING)) {
       // numbers/strings have 2 tokens added by Scanner.java
       return new Expr.Literal(previous().literal);
+    }
+
+    if (match(IDENTIFIER)) {
+      return new Expr.Variable(previous());
     }
 
     if (match(LEFT_PAREN)) {
