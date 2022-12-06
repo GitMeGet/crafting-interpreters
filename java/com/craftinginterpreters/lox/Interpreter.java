@@ -103,6 +103,22 @@ class Interpreter implements Expr.Visitor<Object>,
   }
 
   @Override
+  public Object visitAssignExpr(Expr.Assign expr) {
+    Object value = evaluate(expr.value);
+    environment.assign(expr.name, value);
+    // return the assigned value since assignment is an
+    // expression that can be nested in other expressions
+    //   > var a = 1;
+    //   > print a = 2; // "2"
+    return value;
+  }
+
+  @Override
+  public Object visitVariableExpr(Expr.Variable expr) {
+    return environment.get(expr.name);
+  }
+
+  @Override
   public Void visitExpressionStmt(Stmt.Expression stmt) {
     // evaluate expression and discard value
     // future: store value in variable etc
@@ -129,19 +145,9 @@ class Interpreter implements Expr.Visitor<Object>,
   }
 
   @Override
-  public Object visitAssignExpr(Expr.Assign expr) {
-    Object value = evaluate(expr.value);
-    environment.assign(expr.name, value);
-    // return the assigned value since assignment is an
-    // expression that can be nested in other expressions
-    //   > var a = 1;
-    //   > print a = 2; // "2"
-    return value;
-  }
-
-  @Override
-  public Object visitVariableExpr(Expr.Variable expr) {
-    return environment.get(expr.name);
+  public Void visitBlockStmt(Stmt.Block stmt) {
+    executeBlock(stmt.statements, new Environment(environment));
+    return null;
   }
 
   // only false and nil are falsey
@@ -197,5 +203,22 @@ class Interpreter implements Expr.Visitor<Object>,
 
   private void execute(Stmt stmt) {
     stmt.accept(this);
+  }
+
+  // executes list of statements in a given environment
+  void executeBlock(List<Stmt> statements,
+                    Environment environment) {
+    Environment previous = this.environment;
+    try {
+      // update current env
+      this.environment = environment;
+
+      for (Stmt statement : statements) {
+        execute(statement);
+      }
+    } finally {
+      // restore previous env
+      this.environment = previous;
+    }
   }
 }

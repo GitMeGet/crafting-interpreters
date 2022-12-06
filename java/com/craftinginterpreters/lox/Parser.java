@@ -51,7 +51,8 @@ class Parser {
 
   private Stmt statement() {
     if (match(PRINT)) return printStatement();
-    // assume non-print statements are expressions statements
+    if (match(LEFT_BRACE)) return new Stmt.Block(block());
+    // default: expressions statements
     return expressionStatement();
   }
 
@@ -92,7 +93,22 @@ class Parser {
     return new Stmt.Print(value);
   }
 
+  private List<Stmt> block() {
+    List<Stmt> statements = new ArrayList<>();
+
+    // explicit check for isAtEnd() to avoid infinite loop
+    // when user fogets closing RIGHT_BRACE since
+    // check() returns false when there are no more tokens
+    while (!check(RIGHT_BRACE) && !isAtEnd()) {
+      statements.add(declaration());
+    }
+
+    consume(RIGHT_BRACE, "Expect '}' after block.");
+    return statements;
+  }
+
   private Stmt expressionStatement() {
+
     Expr expr = expression();
     consume(SEMICOLON, "Expect ';' after expression.");
     return new Stmt.Expression(expr);
